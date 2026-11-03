@@ -1,0 +1,233 @@
+diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
+--- a/include/linux/susfs_def.h
++++ b/include/linux/susfs_def.h
+@@ -23,4 +23,5 @@
+ #define CMD_SUSFS_SHOW_VARIANT 0x555e3
+ #define CMD_SUSFS_SHOW_SUS_SU_WORKING_MODE 0x555e4
+ #define CMD_SUSFS_IS_SUS_SU_READY 0x555f0
+ #define CMD_SUSFS_SUS_SU 0x60000
++#define CMD_SUSFS_ADD_CLOCK_OFFSET 0x60010
+
+diff --git a/include/linux/susfs.h b/include/linux/susfs.h
+--- a/include/linux/susfs.h
++++ b/include/linux/susfs.h
+@@ -110,6 +110,21 @@ struct st_susfs_open_redirect {
+ struct st_susfs_open_redirect_hlist {
+ 	unsigned long                    target_ino;
+ 	char                             target_pathname[SUSFS_MAX_LEN_PATHNAME];
+ 	char                             redirected_pathname[SUSFS_MAX_LEN_PATHNAME];
+ 	struct hlist_node                node;
+ };
+ #endif
++
++/* clock_offset */
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++struct st_susfs_clock_offset {
++	int                              target_uid;
++	long long                        delta_mono_ns;
++	long long                        delta_boot_ns;
++};
++struct st_susfs_clock_offset_hlist {
++	int                              target_uid;
++	long long                        delta_mono_ns;
++	long long                        delta_boot_ns;
++	struct hlist_node                node;
++};
++#endif
+
+@@ -174,6 +189,11 @@ int susfs_add_open_redirect(struct st_susfs_open_redirect* __user user_info);
+ #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+ int susfs_add_open_redirect(struct st_susfs_open_redirect* __user user_info);
+ struct filename* susfs_get_redirected_path(unsigned long ino);
+ #endif
++/* clock_offset */
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++int susfs_add_clock_offset(struct st_susfs_clock_offset* __user user_info);
++void susfs_apply_clock_offset(const clockid_t which_clock, struct timespec64 *tp);
++#endif
+ /* sus_su */
+ #ifdef CONFIG_KSU_SUSFS_SUS_SU
+ int susfs_get_sus_su_working_mode(void);
+diff --git a/fs/susfs.c b/fs/susfs.c
+--- a/fs/susfs.c
++++ b/fs/susfs.c
+@@ -831,6 +831,84 @@ struct filename* susfs_get_redirected_path(unsigned long ino) {
+ struct filename* susfs_get_redirected_path(unsigned long ino) {
+ 	struct st_susfs_open_redirect_hlist *entry;
+
+ 	hash_for_each_possible(OPEN_REDIRECT_HLIST, entry, node, ino) {
+ 		if (entry->target_ino == ino) {
+ 			SUSFS_LOGI("Redirect for ino: %lu\n", ino);
+ 			return getname_kernel(entry->redirected_pathname);
+ 		}
+ 	}
+ 	return ERR_PTR(-ENOENT);
+ }
+ #endif // #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
++
++/* clock_offset */
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++static DEFINE_HASHTABLE(CLOCK_OFFSET_HLIST, 4);
++static bool susfs_clock_offset_active = false;
++
++int susfs_add_clock_offset(struct st_susfs_clock_offset* __user user_info) {
++	struct st_susfs_clock_offset info;
++	struct st_susfs_clock_offset_hlist *new_entry, *tmp_entry;
++	struct hlist_node *tmp_node;
++	int bkt;
++
++	if (copy_from_user(&info, user_info, sizeof(info))) {
++		SUSFS_LOGE("failed copying from userspace\n");
++		return 1;
++	}
++
++	/* replace an existing entry for this uid */
++	spin_lock(&susfs_spin_lock);
++	hash_for_each_safe(CLOCK_OFFSET_HLIST, bkt, tmp_node, tmp_entry, node) {
++		if (tmp_entry->target_uid == info.target_uid) {
++			hash_del(&tmp_entry->node);
++			kfree(tmp_entry);
++			break;
++		}
++	}
++	spin_unlock(&susfs_spin_lock);
++
++	new_entry = kmalloc(sizeof(struct st_susfs_clock_offset_hlist), GFP_KERNEL);
++	if (!new_entry) {
++		SUSFS_LOGE("no enough memory\n");
++		return 1;
++	}
++	new_entry->target_uid = info.target_uid;
++	new_entry->delta_mono_ns = info.delta_mono_ns;
++	new_entry->delta_boot_ns = info.delta_boot_ns;
++
++	spin_lock(&susfs_spin_lock);
++	hash_add(CLOCK_OFFSET_HLIST, &new_entry->node, (unsigned int)info.target_uid);
++	susfs_clock_offset_active = true;
++	spin_unlock(&susfs_spin_lock);
++	SUSFS_LOGI("clock_offset added: uid=%d delta_mono=%lld delta_boot=%lld\n",
++			info.target_uid, info.delta_mono_ns, info.delta_boot_ns);
++	return 0;
++}
++
++/*
++ * Called from the clock_gettime(2) SYSCALL path (raw svc only; the vDSO fast
++ * path never reaches here, so Choreographer/vsync are untouched). Adds the
++ * registered per-uid delta to CLOCK_MONOTONIC* and CLOCK_BOOTTIME results so a
++ * freshly-booted device presents a realistic uptime to raw-syscall clock readers.
++ */
++void susfs_apply_clock_offset(const clockid_t which_clock, struct timespec64 *tp) {
++	struct st_susfs_clock_offset_hlist *entry;
++	uid_t uid;
++	long long d = 0;
++
++	if (!susfs_clock_offset_active)
++		return;
++	uid = current_uid().val;
++
++	spin_lock(&susfs_spin_lock);
++	hash_for_each_possible(CLOCK_OFFSET_HLIST, entry, node, uid) {
++		if (entry->target_uid == uid) {
++			if (which_clock == CLOCK_BOOTTIME || which_clock == CLOCK_BOOTTIME_ALARM)
++				d = entry->delta_boot_ns;
++			else if (which_clock == CLOCK_MONOTONIC ||
++			         which_clock == CLOCK_MONOTONIC_RAW ||
++			         which_clock == CLOCK_MONOTONIC_COARSE)
++				d = entry->delta_mono_ns;
++			break;
++		}
++	}
++	spin_unlock(&susfs_spin_lock);
++
++	if (d > 0)
++		timespec64_add_ns(tp, (u64)d);
++}
++#endif // #ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
+
+diff --git a/kernel/time/posix-timers.c b/kernel/time/posix-timers.c
+--- a/kernel/time/posix-timers.c
++++ b/kernel/time/posix-timers.c
+@@ -1065,6 +1065,10 @@
+ }
+
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++extern void susfs_apply_clock_offset(const clockid_t which_clock, struct timespec64 *tp);
++#endif
++
+ SYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,
+ 		struct timespec __user *,tp)
+ {
+@@ -1076,6 +1080,10 @@ SYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,
+ 		return -EINVAL;
+
+ 	error = kc->clock_get(which_clock, &kernel_tp);
+
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++	if (!error)
++		susfs_apply_clock_offset(which_clock, &kernel_tp);
++#endif
+ 	if (!error && put_timespec64(&kernel_tp, tp))
+ 		error = -EFAULT;
+
+@@ -1152,6 +1160,10 @@ COMPAT_SYSCALL_DEFINE2(clock_gettime, clockid_t, which_clock,
+ 		return -EINVAL;
+
+ 	err = kc->clock_get(which_clock, &ts);
+
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++	if (!err)
++		susfs_apply_clock_offset(which_clock, &ts);
++#endif
+ 	if (!err && compat_put_timespec64(&ts, tp))
+ 		err = -EFAULT;
+
+diff --git a/kernel/core_hook.c b/kernel/core_hook.c
+--- a/kernel/core_hook.c
++++ b/kernel/core_hook.c
+@@ -699,6 +699,23 @@
+ 			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
+ 				pr_info("susfs: copy_to_user() failed\n");
+ 			return 0;
+ 		}
+ #endif //#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
++#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
++		if (arg2 == CMD_SUSFS_ADD_CLOCK_OFFSET) {
++			int error = 0;
++			if (!ksu_access_ok((void __user*)arg3, sizeof(struct st_susfs_clock_offset))) {
++				pr_err("susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> arg3 is not accessible\n");
++				return 0;
++			}
++			if (!ksu_access_ok((void __user*)arg5, sizeof(error))) {
++				pr_err("susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> arg5 is not accessible\n");
++				return 0;
++			}
++			error = susfs_add_clock_offset((struct st_susfs_clock_offset __user*)arg3);
++			pr_info("susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> ret: %d\n", error);
++			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
++				pr_info("susfs: copy_to_user() failed\n");
++			return 0;
++		}
++#endif //#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET
+ #ifdef CONFIG_KSU_SUSFS_SUS_SU
+ 		if (arg2 == CMD_SUSFS_SUS_SU) {
+ 			int error = 0;
+diff --git a/kernel/Kconfig b/kernel/Kconfig
+--- a/kernel/Kconfig
++++ b/kernel/Kconfig
+@@ -173,6 +173,16 @@ config KSU_SUSFS_OPEN_REDIRECT
+       - Allow redirecting a target path to be opened with another user-defined path.
+       - Effective only on processes with uid < 2000.
+       - Please be reminded that process with open access to the target and redirected path can be detected.
+
++config KSU_SUSFS_CLOCK_OFFSET
++    bool "Per-uid CLOCK_MONOTONIC/BOOTTIME offset in the clock_gettime syscall path"
++    depends on KSU_SUSFS
++    default y
++    help
++      - Adds a per-uid delta to CLOCK_MONOTONIC* and CLOCK_BOOTTIME results of the
++        clock_gettime(2) SYSCALL only (raw svc); the vDSO fast path is untouched,
++        so Choreographer/vsync and normal app timing are unaffected.
++      - For presenting a realistic uptime / awake-vs-sleep ratio to processes that
++        read the clock via raw syscall (uid-gated).
++
+ config KSU_SUSFS_SUS_SU
