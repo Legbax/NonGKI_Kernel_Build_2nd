@@ -8,7 +8,7 @@ path = sys.argv[1]
 src = open(path, encoding='utf-8').read()
 
 BLOCK = r'''/* ===== OmniShield PR-SealUptime: self-contained per-uid clock offset =====
- * Adds a per-uid delta to CLOCK_MONOTONIC*/CLOCK_BOOTTIME results of the
+ * Adds a per-uid delta to CLOCK_MONOTONIC and CLOCK_BOOTTIME results of the
  * clock_gettime(2) SYSCALL path only (raw svc). The vDSO fast path never
  * reaches here, so Choreographer/vsync and normal app timing are unaffected.
  * Registration is footprint-free: a root caller issues
