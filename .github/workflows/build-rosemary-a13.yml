@@ -97,9 +97,8 @@ jobs:
       - name: Extra Kernel Options
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
-          echo "[+] (unit-test build) applying ONLY OmniShield CLOCK_OFFSET patch"
-          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch || { echo '=== REJECTS ==='; find . -name '*.rej' -exec echo '--- {} ---' \; -exec cat {} \; ; exit 1; }
-          echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/rosemary_defconfig
+          echo "[+] injecting OmniShield uptime offset (zero-footprint) into posix-timers.c"
+          python3 $GITHUB_WORKSPACE/omni_uptime_inject.py kernel/time/posix-timers.c
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
       - name: Register spoofed manager signature (fix /data/adb/ksud read-only lock)
         shell: bash
