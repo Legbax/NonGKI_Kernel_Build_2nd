@@ -97,25 +97,10 @@ jobs:
       - name: Extra Kernel Options
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
-           echo "[+] Applying rosemary SUSFS fixed patch"
-           patch -p1 --fuzz=0 < $GITHUB_WORKSPACE/rosemary_susfs_fixed.patch
-           echo "[+] Applying OmniShield CLOCK_OFFSET patch (uptime spoof)"
-           patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch
-           echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/rosemary_defconfig
-           echo "[+] Verifying version-spoof patch"
-           grep -q "susfs_is_uname_spoof_buffer_set" fs/proc/version.c
-           grep -q "susfs_spoof_uname" kernel/utsname_sysctl.c
-           grep -q "susfs_spoof_uname" kernel/sys.c
-           echo "[+] Version-spoof patch verified OK"
-           grep -q "4.14.186-perf-g079d9bd73b14" init/version.c
-           grep -q "4.14.186-perf-g079d9bd73b14" fs/f2fs/Kconfig
-           grep -q "4.14.186-perf-g079d9bd73b14" kernel/sys.c
-           grep -q "Sun Apr 14 03:38:02 UTC 2024" fs/f2fs/Kconfig
-           grep -q "Sun Apr 14 03:38:02 UTC 2024" kernel/sys.c
-           echo "[+] Hardcoded kernel version + f2fs fake-version verified OK"
-           echo "[+] Fix ksu_handle_stat flag -> flags"
-           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c
-
+          echo "[+] (unit-test build) applying ONLY OmniShield CLOCK_OFFSET patch"
+          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch || { echo '=== REJECTS ==='; find . -name '*.rej' -exec echo '--- {} ---' \; -exec cat {} \; ; exit 1; }
+          echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/rosemary_defconfig
+          sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
       - name: Register spoofed manager signature (fix /data/adb/ksud read-only lock)
         shell: bash
         run: |
