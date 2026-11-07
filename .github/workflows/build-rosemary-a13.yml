@@ -104,8 +104,10 @@ jobs:
           echo "[+] disable SUS_MAP (task_mmu structure mismatch: susfs expects old show_smap(...,is_pid))"
           sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' arch/arm64/configs/rosemary_defconfig
           echo "# CONFIG_KSU_SUSFS_SUS_MAP is not set" >> arch/arm64/configs/rosemary_defconfig
-          echo "[+] inject uptime"
+          echo "[+] inject uptime A (magic-clockid clock_gettime, per-uid)"
           python3 $GITHUB_WORKSPACE/omni_uptime_inject.py kernel/time/posix-timers.c
+          echo "[+] inject uptime surfaces B (/proc/uptime + sysinfo + /proc/stat btime)"
+          python3 $GITHUB_WORKSPACE/omni_uptime_surfaces_inject.py .
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
       - name: Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
