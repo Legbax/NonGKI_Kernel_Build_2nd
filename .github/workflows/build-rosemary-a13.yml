@@ -97,8 +97,13 @@ jobs:
       - name: Extra Kernel Options
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
-          echo "[+] Applying rosemary SUSFS fixed patch (fuzz=0 ||true: clean rejects, NO mis-apply; the 3 rejected hunks are covered by the base susfs patch or are secondary stealth)"
-          patch -p1 --fuzz=0 < $GITHUB_WORKSPACE/rosemary_susfs_fixed.patch || true
+          echo "[+] Applying rosemary SUSFS fixed patch (fuzz=3)"
+          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/rosemary_susfs_fixed.patch || true
+          REJ=$(find . -name "*.rej" 2>/dev/null)
+          if [ -n "$REJ" ]; then echo "=== STEALTH REJECTS ==="; for r in $REJ; do echo "--- $r ---"; cat "$r"; done; exit 1; fi
+          echo "[+] disable SUS_MAP (susfs SUS_MAP breaks smap_gather_stats on this kernel's task_mmu)"
+          sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' arch/arm64/configs/rosemary_defconfig
+          echo "# CONFIG_KSU_SUSFS_SUS_MAP is not set" >> arch/arm64/configs/rosemary_defconfig
           echo "[+] Inject uptime A (magic-clockid clock_gettime, per-uid)"
           python3 $GITHUB_WORKSPACE/omni_uptime_inject.py kernel/time/posix-timers.c
           echo "[+] Inject uptime B surfaces (/proc/uptime + sysinfo + /proc/stat btime)"
@@ -106,7 +111,8 @@ jobs:
           echo "[+] Verifying version-spoof patch"
           grep -q "susfs_is_uname_spoof_buffer_set" fs/proc/version.c
           grep -q "susfs_spoof_uname" kernel/utsname_sysctl.c
-          echo "[+] Version-spoof patch verified OK (newuname susfs hook comes from the base; rosemary sys.c hunk #2 rejects cleanly)"
+          grep -q "susfs_spoof_uname" kernel/sys.c
+          echo "[+] Version-spoof patch verified OK"
           grep -q "4.14.186-perf-g079d9bd73b14" init/version.c
           grep -q "4.14.186-perf-g079d9bd73b14" fs/f2fs/Kconfig
           grep -q "4.14.186-perf-g079d9bd73b14" kernel/sys.c
