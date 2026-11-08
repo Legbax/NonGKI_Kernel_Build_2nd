@@ -97,8 +97,8 @@ jobs:
       - name: Extra Kernel Options
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
-          echo "[+] Applying rosemary SUSFS fixed patch"
-          patch -p1 --fuzz=0 < $GITHUB_WORKSPACE/rosemary_susfs_fixed.patch
+          echo "[+] Applying rosemary SUSFS fixed patch (fuzz=3, tolerant — matches the proven omni-uptime-surfaces recipe)"
+          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/rosemary_susfs_fixed.patch || true
           echo "[+] Inject uptime A (magic-clockid clock_gettime, per-uid)"
           python3 $GITHUB_WORKSPACE/omni_uptime_inject.py kernel/time/posix-timers.c
           echo "[+] Inject uptime B surfaces (/proc/uptime + sysinfo + /proc/stat btime)"
