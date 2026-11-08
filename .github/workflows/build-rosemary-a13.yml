@@ -99,15 +99,10 @@ jobs:
           cd $GITHUB_WORKSPACE/device_kernel
           echo "[+] Applying rosemary SUSFS fixed patch"
           patch -p1 --fuzz=0 < $GITHUB_WORKSPACE/rosemary_susfs_fixed.patch
-          echo "[+] Applying OmniShield CLOCK_OFFSET patch (uptime A: clock_gettime syscall)"
-          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch
-          echo "[+] Applying OmniShield CLOCK surfaces patch (uptime B: /proc/uptime + sysinfo + /proc/stat btime)"
-          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_surfaces.patch || true
-          echo "[+] Checking for patch rejects"
-          REJ=$(find . -name '*.rej' 2>/dev/null || true)
-          if [ -n "$REJ" ]; then echo "[-] REJECTS present:"; echo "$REJ"; for f in $REJ; do echo "=== $f ==="; cat "$f"; done; exit 1; fi
-          echo "[+] No rejects"
-          echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/rosemary_defconfig
+          echo "[+] Inject uptime A (magic-clockid clock_gettime, per-uid)"
+          python3 $GITHUB_WORKSPACE/omni_uptime_inject.py kernel/time/posix-timers.c
+          echo "[+] Inject uptime B surfaces (/proc/uptime + sysinfo + /proc/stat btime)"
+          python3 $GITHUB_WORKSPACE/omni_uptime_surfaces_inject.py .
           echo "[+] Verifying version-spoof patch"
           grep -q "susfs_is_uname_spoof_buffer_set" fs/proc/version.c
           grep -q "susfs_spoof_uname" kernel/utsname_sysctl.c
@@ -119,12 +114,12 @@ jobs:
           grep -q "Sun Apr 14 03:38:02 UTC 2024" fs/f2fs/Kconfig
           grep -q "Sun Apr 14 03:38:02 UTC 2024" kernel/sys.c
           echo "[+] Hardcoded kernel version + f2fs fake-version verified OK"
-          echo "[+] Verifying uptime A (CLOCK_OFFSET) + B (3 surfaces) are in-tree"
-          grep -q "susfs_apply_clock_offset" fs/susfs.c
-          grep -q "susfs_get_clock_boot_off_current" fs/susfs.c
-          grep -q "susfs_get_clock_boot_off_current" fs/proc/uptime.c
-          grep -q "susfs_get_clock_boot_off_current" kernel/sys.c
-          grep -q "susfs_get_clock_boot_off_current" fs/proc/stat.c
+          echo "[+] Verifying uptime A (magic-clockid) + B (3 surfaces) injected"
+          grep -q "OMNI_UPTIME_MAGIC" kernel/time/posix-timers.c
+          grep -q "omni_get_boot_off_current" kernel/time/posix-timers.c
+          grep -q "omni_get_boot_off_current" fs/proc/uptime.c
+          grep -q "omni_get_boot_off_current" kernel/sys.c
+          grep -q "omni_get_boot_off_current" fs/proc/stat.c
           echo "[+] Uptime A + B verified OK"
           echo "[+] Fix ksu_handle_stat flag -> flags"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c
