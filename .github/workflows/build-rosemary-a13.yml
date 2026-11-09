@@ -110,6 +110,8 @@ jobs:
           python3 $GITHUB_WORKSPACE/omni_uptime_surfaces_inject.py .
           echo "[+] Inject uptime C: global coherent random-at-init offset (v2, timekeeping.c)"
           python3 $GITHUB_WORKSPACE/omni_uptime_randinit_inject.py kernel/time/timekeeping.c
+          echo "[+] Inject susfs ino-spoof (robust st_ino for the sdcardfs .nomedia correlator)"
+          python3 $GITHUB_WORKSPACE/omni_susfs_ino_inject.py fs/susfs.c
           echo "[+] Verifying version-spoof patch"
           grep -q "susfs_is_uname_spoof_buffer_set" fs/proc/version.c
           grep -q "susfs_spoof_uname" kernel/utsname_sysctl.c
@@ -130,6 +132,8 @@ jobs:
           echo "[+] Uptime A + B verified OK"
           grep -q "OMNI-RandInit" kernel/time/timekeeping.c
           echo "[+] Uptime C (global coherent random-at-init offset) verified OK"
+          grep -q "OMNI-InoSpoof" fs/susfs.c
+          echo "[+] susfs ino-spoof verified OK"
           echo "[+] Fix ksu_handle_stat flag -> flags"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c
 
