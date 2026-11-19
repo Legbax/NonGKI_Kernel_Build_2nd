@@ -108,8 +108,8 @@ jobs:
           python3 $GITHUB_WORKSPACE/omni_uptime_inject.py kernel/time/posix-timers.c
           echo "[+] Inject uptime B surfaces (/proc/uptime + sysinfo + /proc/stat btime)"
           python3 $GITHUB_WORKSPACE/omni_uptime_surfaces_inject.py .
-          echo "[+] Inject uptime C: global coherent random-at-init offset (v2, timekeeping.c)"
-          python3 $GITHUB_WORKSPACE/omni_uptime_randinit_inject.py kernel/time/timekeeping.c
+          echo "[+] Inject uptime C: v4 uniform offset + idle coherence (timekeeping/uptime/stat)"
+          python3 $GITHUB_WORKSPACE/omni_uptime_v4_inject.py .
           echo "[+] Inject susfs ino-spoof (robust st_ino for the sdcardfs .nomedia correlator)"
           python3 $GITHUB_WORKSPACE/omni_susfs_ino_inject.py fs/susfs.c
           echo "[+] Verifying version-spoof patch"
@@ -130,8 +130,13 @@ jobs:
           grep -q "omni_get_boot_off_current" kernel/sys.c
           grep -q "omni_get_boot_off_current" fs/proc/stat.c
           echo "[+] Uptime A + B verified OK"
-          grep -q "OMNI-RandInit" kernel/time/timekeeping.c
-          echo "[+] Uptime C (global coherent random-at-init offset) verified OK"
+          grep -q "OMNI-v4" kernel/time/timekeeping.c
+          grep -q "tmp.tv_sec += gb_age;" kernel/time/timekeeping.c
+          grep -q "tk->raw_sec += gb_age;" kernel/time/timekeeping.c
+          grep -q "if (gb_idle_age) idle.tv_sec += gb_idle_age;" fs/proc/uptime.c
+          grep -q "if (gb_idle_age) idle += (u64)gb_idle_age \* NSEC_PER_SEC;" fs/proc/stat.c
+          grep -q "idle += (u64)gb_idle_age \* NSEC_PER_SEC / num_online_cpus();" fs/proc/stat.c
+          echo "[+] Uptime C (v4 uniform offset + idle coherence) verified OK"
           grep -q "OMNI-InoSpoof" fs/susfs.c
           echo "[+] susfs ino-spoof verified OK"
           echo "[+] Fix ksu_handle_stat flag -> flags"
