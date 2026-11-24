@@ -246,26 +246,38 @@ else:
     if "CMD_SUSFS_ADD_CLOCK_OFFSET" in s:
         print("[=] %s: dispatch present" % ch)
     else:
-        block = (
-            "#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET\n"
-            "\t\tif (arg2 == CMD_SUSFS_ADD_CLOCK_OFFSET) {\n"
-            "\t\t\tint error = 0;\n"
-            "\t\t\tif (!ksu_access_ok((void __user*)arg3, sizeof(struct st_susfs_clock_offset))) {\n"
-            "\t\t\t\tpr_err(\"susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> arg3 is not accessible\\n\");\n"
-            "\t\t\t\treturn 0;\n"
-            "\t\t\t}\n"
-            "\t\t\tif (!ksu_access_ok((void __user*)arg5, sizeof(error))) {\n"
-            "\t\t\t\tpr_err(\"susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> arg5 is not accessible\\n\");\n"
-            "\t\t\t\treturn 0;\n"
-            "\t\t\t}\n"
-            "\t\t\terror = susfs_add_clock_offset((struct st_susfs_clock_offset __user*)arg3);\n"
-            "\t\t\tpr_info(\"susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> ret: %d\\n\", error);\n"
-            "\t\t\tif (copy_to_user((void __user*)arg5, &error, sizeof(error)))\n"
-            "\t\t\t\tpr_info(\"susfs: copy_to_user() failed\\n\");\n"
-            "\t\t\treturn 0;\n"
-            "\t\t}\n"
-            "#endif //#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET\n"
-        )
+        if "arg2 == CMD_SUSFS_" in s or "arg2==CMD_SUSFS_" in s:
+            # resukisu if-style handler: (arg2=cmd, arg3=user ptr, arg5=result)
+            block = (
+                "#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET\n"
+                "\t\tif (arg2 == CMD_SUSFS_ADD_CLOCK_OFFSET) {\n"
+                "\t\t\tint error = 0;\n"
+                "\t\t\tif (!ksu_access_ok((void __user*)arg3, sizeof(struct st_susfs_clock_offset))) {\n"
+                "\t\t\t\tpr_err(\"susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> arg3 is not accessible\\n\");\n"
+                "\t\t\t\treturn 0;\n"
+                "\t\t\t}\n"
+                "\t\t\tif (!ksu_access_ok((void __user*)arg5, sizeof(error))) {\n"
+                "\t\t\t\tpr_err(\"susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> arg5 is not accessible\\n\");\n"
+                "\t\t\t\treturn 0;\n"
+                "\t\t\t}\n"
+                "\t\t\terror = susfs_add_clock_offset((struct st_susfs_clock_offset __user*)arg3);\n"
+                "\t\t\tpr_info(\"susfs: CMD_SUSFS_ADD_CLOCK_OFFSET -> ret: %d\\n\", error);\n"
+                "\t\t\tif (copy_to_user((void __user*)arg5, &error, sizeof(error)))\n"
+                "\t\t\t\tpr_info(\"susfs: copy_to_user() failed\\n\");\n"
+                "\t\t\treturn 0;\n"
+                "\t\t}\n"
+                "#endif //#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET\n"
+            )
+        else:
+            # bakasu switch/case-style handler: single `arg` (the __user ptr); handler copies in itself
+            block = (
+                "#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET\n"
+                "\t\tcase CMD_SUSFS_ADD_CLOCK_OFFSET: {\n"
+                "\t\t\tsusfs_add_clock_offset((struct st_susfs_clock_offset __user *)arg);\n"
+                "\t\t\treturn 0;\n"
+                "\t\t}\n"
+                "#endif //#ifdef CONFIG_KSU_SUSFS_CLOCK_OFFSET\n"
+            )
         a1 = "#endif //#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT"
         a2 = "#ifdef CONFIG_KSU_SUSFS_SUS_SU"
         if a1 in s:
