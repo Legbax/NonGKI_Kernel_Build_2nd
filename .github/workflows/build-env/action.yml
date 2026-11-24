@@ -207,6 +207,11 @@ runs:
             fi
 
           elif [ "${{ env.SYSTEM_VERSION }}" == "newer" ]; then
+            echo "::group::[+] Forcing a faster apt mirror (runner default throttled to ~100KB/s)..."
+            sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|http://archive.ubuntu.com/ubuntu/|g' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list 2>/dev/null || true
+            echo 'http://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null 2>&1 || true
+            echo "[i] active apt URIs:"; grep -rhs '^URIs\|ubuntu.com' /etc/apt/sources.list.d/ubuntu.sources /etc/apt/apt-mirrors.txt 2>/dev/null | head -3 || true
+            echo "::endgroup::"
             echo "::group::[+] Starting install base packages..."
             sudo apt update
             sudo apt install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev make optipng maven libssl-dev pwgen libswitch-perl policycoreutils minicom libxml-sax-base-perl libxml-simple-perl bc libc6-dev-i386 libx11-dev lib32z-dev libgl1-mesa-dev xsltproc unzip device-tree-compiler cpio liblz4-tool lz4 libz3-4 elfutils -y
