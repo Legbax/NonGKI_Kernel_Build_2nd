@@ -214,12 +214,11 @@ runs:
             echo "::endgroup::"
             echo "[+] The base packages is installed."
 
-            # Install Coccinelle (FAST: apt in seconds instead of ~50min single-threaded source build.
-            # This build does not invoke spatch in any active patch step, so the apt version is fine / optional.)
-            echo "::group::[+] Installing coccinelle via apt (fast)..."
-            sudo apt-get install -y coccinelle || echo "[!] coccinelle apt unavailable; skipping (not used by this build)"
-            echo "::endgroup::"
-            echo "[+] Coccinelle step done (apt, fast path)."
+            # Coccinelle SKIPPED entirely: this build invokes no spatch/.cocci in any active patch step
+            # (patch-no-kprobe and patch-susfs use plain `patch`; rekernel/droidspaces/baseband/nomount are disabled).
+            # The source build was ~50min single-threaded; the apt install pulls ~145MB of OCaml over a slow mirror.
+            # Both were pure waste for this device, so we skip it.
+            echo "[+] Coccinelle skipped (not used by this build)."
 
             # Install Libtinfo5
             ${{ env.CURLX }} https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2_amd64.deb libtinfo5.deb
