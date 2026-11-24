@@ -214,18 +214,12 @@ runs:
             echo "::endgroup::"
             echo "[+] The base packages is installed."
 
-            # Install Coccinelle
-            echo "::group::[+] Starting build coccinelle..."
-            sudo apt-get install pkg-config ocaml-nox ocaml-findlib autoconf libpcre3-dev python3-dev menhir libparmap-ocaml-dev libpcre-ocaml-dev -y
-            ${{ env.CURLX }} "https://github.com/coccinelle/coccinelle/archive/refs/tags/1.3.0.tar.gz" "coccinelle.tar.gz"
-            tar zxf coccinelle.tar.gz
-            cd coccinelle-1.3.0
-            ./autogen
-            ./configure
-            make
-            sudo make install
+            # Install Coccinelle (FAST: apt in seconds instead of ~50min single-threaded source build.
+            # This build does not invoke spatch in any active patch step, so the apt version is fine / optional.)
+            echo "::group::[+] Installing coccinelle via apt (fast)..."
+            sudo apt-get install -y coccinelle || echo "[!] coccinelle apt unavailable; skipping (not used by this build)"
             echo "::endgroup::"
-            echo "[+] Coccinelle is installed."
+            echo "[+] Coccinelle step done (apt, fast path)."
 
             # Install Libtinfo5
             ${{ env.CURLX }} https://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2_amd64.deb libtinfo5.deb
