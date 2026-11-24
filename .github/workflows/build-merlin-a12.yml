@@ -132,8 +132,8 @@ jobs:
           echo "[+] ksu_handle_stat flag -> flags (4.14 fs/stat.c, harmless if absent)"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
 
-          echo "[+] GB SPOOF: apply omni_clock_offset.patch (per-uid uptime spoof via clock_gettime syscall) — same as rosemary's PATCHED KIT"
-          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch || true
+          echo "[+] GB SPOOF: apply omni_clock_offset via 'git apply --recount' (patch(1) aborts 'malformed' on the hunk's off-by-one @@ line-counts)"
+          git apply -p1 --recount --reject --whitespace=nowarn $GITHUB_WORKSPACE/omni_clock_offset.patch 2>&1 || true
           # Only the susfs_def.h CMD-define hunk context differs on merlin's SUSFS 2.2.00; add it robustly after the last CMD_SUSFS_ define.
           if ! grep -q 'CMD_SUSFS_ADD_CLOCK_OFFSET' include/linux/susfs_def.h; then
             LAST=$(grep -n '#define CMD_SUSFS_' include/linux/susfs_def.h | tail -1 | cut -d: -f1)
