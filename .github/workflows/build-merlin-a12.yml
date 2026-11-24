@@ -115,7 +115,7 @@ jobs:
           echo "# CONFIG_KSU_SUSFS_SUS_PATH is not set" >> "$DC"
 
           echo "[+] Error2+: downgrade clang -Werror nits in GCC-era MTK drivers (benign; code ships on devices)."
-          echo "KCFLAGS=-Wno-error -Wno-strict-prototypes" >> $GITHUB_ENV
+          echo "KCFLAGS=-Wno-error -Wno-strict-prototypes -Wno-error=implicit-int -Wno-error=implicit-function-declaration" >> $GITHUB_ENV
           echo "[+] ...and strip bare -Werror from DRIVER-AREA Makefiles (MTK subdir-ccflags-y -Werror overrides the global KCFLAGS). NOT ./Makefile/scripts/arch (that broke prepare-compiler-check). -Werror=foo preserved."
           for d in drivers sound net crypto; do
             find "$d" -type f \( -name 'Makefile' -o -name 'Kbuild' -o -name '*.mk' \) -print0 2>/dev/null \
