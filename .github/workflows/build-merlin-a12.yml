@@ -132,6 +132,18 @@ jobs:
           echo "[+] ksu_handle_stat flag -> flags (4.14 fs/stat.c, harmless if absent)"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
 
+          echo "[+] GB SPOOF: apply omni_clock_offset.patch (per-uid uptime spoof via clock_gettime syscall) — same as rosemary's PATCHED KIT"
+          patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch || true
+          CLKREJ=$(find . -name '*.rej' 2>/dev/null)
+          if [ -n "$CLKREJ" ]; then
+            echo "=== CLOCK_OFFSET REJECTS (version skew vs merlin SUSFS/KSU) ==="
+            for r in $CLKREJ; do echo "--- $r ---"; cat "$r"; done
+            echo "[!] clock_offset rejected -> NOT enabling CONFIG_KSU_SUSFS_CLOCK_OFFSET (build stays baseline; fix the hunks next iter)"
+          else
+            echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/merlin_defconfig
+            echo "[+] CLOCK_OFFSET applied cleanly + enabled"
+          fi
+
       - name: Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
 
