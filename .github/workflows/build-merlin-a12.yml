@@ -114,8 +114,8 @@ jobs:
           sed -i '/^CONFIG_KSU_SUSFS_SUS_PATH=y/d' "$DC" || true
           echo "# CONFIG_KSU_SUSFS_SUS_PATH is not set" >> "$DC"
 
-          echo "[+] Error2: strip bare -Werror from Makefiles/Kbuild (merlin drivers trip -Wstrict-prototypes; keep -Werror=foo)"
-          find . \( -name 'Makefile*' -o -name 'Kbuild*' \) -type f -print0 | xargs -0 sed -i -e 's/-Werror=/__WERR__=/g' -e 's/-Werror//g' -e 's/__WERR__=/-Werror=/g'
+          echo "[+] Error2: downgrade -Wstrict-prototypes via KCFLAGS (safe; the prior blanket -Werror strip mangled the cc-option/stackprotector check)"
+          echo "KCFLAGS=-Wno-strict-prototypes -Wno-error=strict-prototypes" >> $GITHUB_ENV
 
           echo "[+] ksu_handle_stat flag -> flags (4.14 fs/stat.c, harmless if absent)"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
