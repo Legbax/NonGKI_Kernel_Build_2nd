@@ -95,15 +95,30 @@ jobs:
       - name: Patch for no-kprobe
         uses: ./.github/workflows/patch-no-kprobe
 
-      - name: Extra Kernel Options (iter-1 baseline)
+      - name: Extra Kernel Options (iter-2 build fixes)
         run: |
           cd $GITHUB_WORKSPACE/device_kernel
-          echo "[+] (iter1) preempt SUS_MAP disable (old show_smap(...,is_pid) signature on 4.14 MTK)"
-          sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' arch/arm64/configs/merlin_defconfig || true
-          echo "# CONFIG_KSU_SUSFS_SUS_MAP is not set" >> arch/arm64/configs/merlin_defconfig
+          DC=arch/arm64/configs/merlin_defconfig
+
+          echo "[+] keep SUS_MAP off (old show_smap(...,is_pid) signature on 4.14 MTK)"
+          sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' "$DC" || true
+          echo "# CONFIG_KSU_SUSFS_SUS_MAP is not set" >> "$DC"
+
+          echo "[+] Error1: add susfs_def.h include to task_mmu.c (SUSFS include hunk rejected on merlin)"
+          if ! grep -q 'linux/susfs_def.h' fs/proc/task_mmu.c; then
+            sed -i '/#include <linux\/mm_inline.h>/a #if defined(CONFIG_KSU_SUSFS_SUS_KSTAT) || defined(CONFIG_KSU_SUSFS_SUS_MAP) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)\n#include <linux/susfs_def.h>\n#endif' fs/proc/task_mmu.c
+          fi
+          grep -n 'susfs_def.h' fs/proc/task_mmu.c || echo "[!] susfs_def.h include NOT added"
+
+          echo "[+] Error3: disable SUS_PATH (bakasu uses CMD_SUSFS_SET_SUS_PATH_UID_FILTER absent in SUSFS 2.2.00)"
+          sed -i '/^CONFIG_KSU_SUSFS_SUS_PATH=y/d' "$DC" || true
+          echo "# CONFIG_KSU_SUSFS_SUS_PATH is not set" >> "$DC"
+
+          echo "[+] Error2: strip bare -Werror from Makefiles/Kbuild (merlin drivers trip -Wstrict-prototypes; keep -Werror=foo)"
+          find . \( -name 'Makefile*' -o -name 'Kbuild*' \) -type f -print0 | xargs -0 sed -i -e 's/-Werror=/__WERR__=/g' -e 's/-Werror//g' -e 's/__WERR__=/-Werror=/g'
+
           echo "[+] ksu_handle_stat flag -> flags (4.14 fs/stat.c, harmless if absent)"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
-          echo "[+] iter-1 collects SUSFS .rej (patch_rejected_files artifact) to author merlin_susfs_fixed.patch"
 
       - name: Patch Kernel of Re:Kernel
         uses: ./.github/workflows/patch-rekernel
