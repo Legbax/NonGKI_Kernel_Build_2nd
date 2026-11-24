@@ -132,26 +132,19 @@ jobs:
           echo "[+] ksu_handle_stat flag -> flags (4.14 fs/stat.c, harmless if absent)"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
 
-          echo "[+] GB SPOOF: apply omni_clock_offset via 'git apply --recount' (patch(1) aborts 'malformed' on the hunk's off-by-one @@ line-counts)"
-          git apply -p1 --recount --reject --whitespace=nowarn $GITHUB_WORKSPACE/omni_clock_offset.patch 2>&1 || true
-          # Only the susfs_def.h CMD-define hunk context differs on merlin's SUSFS 2.2.00; add it robustly after the last CMD_SUSFS_ define.
-          if ! grep -q 'CMD_SUSFS_ADD_CLOCK_OFFSET' include/linux/susfs_def.h; then
-            LAST=$(grep -n '#define CMD_SUSFS_' include/linux/susfs_def.h | tail -1 | cut -d: -f1)
-            if [ -n "$LAST" ]; then
-              sed -i "${LAST}a #define CMD_SUSFS_ADD_CLOCK_OFFSET 0x60010" include/linux/susfs_def.h
-              echo "[+] CMD_SUSFS_ADD_CLOCK_OFFSET added after susfs_def.h:$LAST"
-            fi
-          fi
-          rm -f include/linux/susfs_def.h.rej
-          CLKREJ=$(find . -name '*.rej' 2>/dev/null)
-          if [ -n "$CLKREJ" ]; then
-            echo "=== CLOCK_OFFSET REJECTS (remaining) ==="; for r in $CLKREJ; do echo "--- $r ---"; cat "$r"; done
-            echo "[!] remaining rejects -> NOT enabling CLOCK_OFFSET"
-          elif grep -q 'CMD_SUSFS_ADD_CLOCK_OFFSET' include/linux/susfs_def.h && grep -q 'susfs_apply_clock_offset' kernel/time/posix-timers.c && grep -q 'KSU_SUSFS_CLOCK_OFFSET' kernel/Kconfig; then
+          echo "[+] GB SPOOF: posix-timers.c + Kconfig via git apply --recount; the 4 layout-skewed pieces via apply_merlin_clock_offset.py"
+          git apply -p1 --recount --reject --whitespace=nowarn $GITHUB_WORKSPACE/omni_clock_offset.patch 2>&1 | head -20 || true
+          find . -name '*.rej' -delete 2>/dev/null || true
+          python3 $GITHUB_WORKSPACE/apply_merlin_clock_offset.py || echo "[!] hand-port script reported issues (see above)"
+          if grep -q 'CMD_SUSFS_ADD_CLOCK_OFFSET' include/linux/susfs_def.h \
+             && grep -q 'st_susfs_clock_offset' include/linux/susfs.h \
+             && grep -q 'susfs_apply_clock_offset' fs/susfs.c \
+             && grep -q 'susfs_apply_clock_offset' kernel/time/posix-timers.c \
+             && grep -q 'KSU_SUSFS_CLOCK_OFFSET' kernel/Kconfig; then
             echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/merlin_defconfig
-            echo "[+] CLOCK_OFFSET fully applied + enabled (GB uptime spoof ACTIVE)"
+            echo "[+] CLOCK_OFFSET all pieces present + enabled (GB uptime spoof ACTIVE)"
           else
-            echo "[!] CLOCK_OFFSET incomplete -> NOT enabling"
+            echo "[!] CLOCK_OFFSET pieces missing -> NOT enabling (stays baseline)"
           fi
 
       - name: Patch Kernel of Re:Kernel
