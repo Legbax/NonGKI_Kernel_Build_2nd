@@ -134,14 +134,24 @@ jobs:
 
           echo "[+] GB SPOOF: apply omni_clock_offset.patch (per-uid uptime spoof via clock_gettime syscall) — same as rosemary's PATCHED KIT"
           patch -p1 --fuzz=3 < $GITHUB_WORKSPACE/omni_clock_offset.patch || true
+          # Only the susfs_def.h CMD-define hunk context differs on merlin's SUSFS 2.2.00; add it robustly after the last CMD_SUSFS_ define.
+          if ! grep -q 'CMD_SUSFS_ADD_CLOCK_OFFSET' include/linux/susfs_def.h; then
+            LAST=$(grep -n '#define CMD_SUSFS_' include/linux/susfs_def.h | tail -1 | cut -d: -f1)
+            if [ -n "$LAST" ]; then
+              sed -i "${LAST}a #define CMD_SUSFS_ADD_CLOCK_OFFSET 0x60010" include/linux/susfs_def.h
+              echo "[+] CMD_SUSFS_ADD_CLOCK_OFFSET added after susfs_def.h:$LAST"
+            fi
+          fi
+          rm -f include/linux/susfs_def.h.rej
           CLKREJ=$(find . -name '*.rej' 2>/dev/null)
           if [ -n "$CLKREJ" ]; then
-            echo "=== CLOCK_OFFSET REJECTS (version skew vs merlin SUSFS/KSU) ==="
-            for r in $CLKREJ; do echo "--- $r ---"; cat "$r"; done
-            echo "[!] clock_offset rejected -> NOT enabling CONFIG_KSU_SUSFS_CLOCK_OFFSET (build stays baseline; fix the hunks next iter)"
-          else
+            echo "=== CLOCK_OFFSET REJECTS (remaining) ==="; for r in $CLKREJ; do echo "--- $r ---"; cat "$r"; done
+            echo "[!] remaining rejects -> NOT enabling CLOCK_OFFSET"
+          elif grep -q 'CMD_SUSFS_ADD_CLOCK_OFFSET' include/linux/susfs_def.h && grep -q 'susfs_apply_clock_offset' kernel/time/posix-timers.c && grep -q 'KSU_SUSFS_CLOCK_OFFSET' kernel/Kconfig; then
             echo "CONFIG_KSU_SUSFS_CLOCK_OFFSET=y" >> arch/arm64/configs/merlin_defconfig
-            echo "[+] CLOCK_OFFSET applied cleanly + enabled"
+            echo "[+] CLOCK_OFFSET fully applied + enabled (GB uptime spoof ACTIVE)"
+          else
+            echo "[!] CLOCK_OFFSET incomplete -> NOT enabling"
           fi
 
       - name: Patch Kernel of Re:Kernel
