@@ -122,6 +122,9 @@ jobs:
               | xargs -0 -r sed -i -e 's/-Werror=/__WE__=/g' -e 's/-Werror//g' -e 's/__WE__=/-Werror=/g'
           done
 
+          echo "[+] Link: allow duplicate symbols (MTK VCU driver defines mtk_vcu_*/vcu_* in both mtk_vcu.c and mtk_vcodec_mem.c; GNU ld tolerated it, ld.lld does not — take the first def)"
+          printf '\nLDFLAGS += --allow-multiple-definition\nKBUILD_LDFLAGS += --allow-multiple-definition\nLDFLAGS_vmlinux += --allow-multiple-definition\n' >> Makefile
+
           echo "[+] ksu_handle_stat flag -> flags (4.14 fs/stat.c, harmless if absent)"
           sed -i 's/ksu_handle_stat(&dfd, &fname, &flag);/ksu_handle_stat(\&dfd, \&fname, \&flags);/' fs/stat.c || true
 
