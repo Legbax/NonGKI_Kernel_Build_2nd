@@ -4,7 +4,7 @@
 # of assuming the resukisu paths the upstream patch expects. Idempotent.
 # Pieces: susfs_def.h define, susfs.h structs+decls, fs/susfs.c funcs,
 #         posix-timers.c syscall hook, KSU Kconfig entry, core_hook dispatch.
-import os, sys
+import os, sys, re
 
 def read(p):
     with open(p, "r", errors="ignore") as f:
@@ -40,9 +40,12 @@ if os.path.exists(p):
         lines = s.split("\n")
         idxs = [i for i, l in enumerate(lines) if l.startswith("#define CMD_SUSFS_")]
         if idxs:
-            lines.insert(idxs[-1] + 1, "#define CMD_SUSFS_ADD_CLOCK_OFFSET 0x60010")
+            # pick a value that does NOT collide with any existing CMD_SUSFS_* (bakasu already uses 0x60010)
+            used = [int(m, 16) for m in re.findall(r'#define\s+CMD_SUSFS_\w+\s+(0x[0-9a-fA-F]+)', s)]
+            val = (max(used) + 0x100) if used else 0x600100
+            lines.insert(idxs[-1] + 1, "#define CMD_SUSFS_ADD_CLOCK_OFFSET 0x%X" % val)
             write(p, "\n".join(lines))
-            print("[+] susfs_def.h: added define")
+            print("[+] susfs_def.h: added define = 0x%X (max existing + 0x100)" % val)
         else:
             errs.append("susfs_def.h: no CMD_SUSFS_ anchor")
     else:
