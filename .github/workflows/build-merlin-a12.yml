@@ -11,9 +11,9 @@ env:
   CUSTOM_CMDS: "CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CROSS_COMPILE_COMPAT=arm-linux-gnueabi-"
   EXTRA_CMDS: "CLANG_TRIPLE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip READELF=llvm-readelf HOSTCC=clang HOSTCXX=clang++"
 
-  # merlin (mt6768) Android 12 source (fork of Redmi-MT6768), kernel 4.14.294 — matches the MIUI-13/A12 vendor
-  KERNEL_SOURCE: "https://github.com/Legbax/android_kernel_xiaomi_mt6768"
-  KERNEL_BRANCH: "twelve"
+  # merlin MIUI STOCK kernel source (official Xiaomi MiCode, 4.14.186) — LOS tree bootloops on MIUI 13, this one matches the vendor
+  KERNEL_SOURCE: "https://github.com/MiCode/Xiaomi_Kernel_OpenSource"
+  KERNEL_BRANCH: "merlin-r-oss"
 
   CLANG_SOURCE: "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
   CLANG_BRANCH: ""
@@ -44,7 +44,7 @@ env:
   NEED_SAFE_DTBO: false
   PACK_METHOD: "AnyKernel3"
   PACK_KMODULES: "false"
-  ROM_TEXT: "merlinx_miui_a12"
+  ROM_TEXT: "merlin_miui13_stock"
   PYTHON_VERSION: "3"
 
   PATCHES_SOURCE: "JackA1ltman/NonGKI_Kernel_Patches"
