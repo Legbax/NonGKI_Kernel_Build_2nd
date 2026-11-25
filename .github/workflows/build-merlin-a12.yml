@@ -100,8 +100,11 @@ jobs:
           cd $GITHUB_WORKSPACE/device_kernel
           DC=arch/arm64/configs/merlin_defconfig
 
-          echo "[+] MiCode stock: drop -Werror from the Makefile prepare-compiler-check stackprotector probe (clang emits a benign warning that -Werror turns fatal -> 'not supported')"
-          sed -i 's/-Werror -fstack-protector/-fstack-protector/g' Makefile || true
+          echo "[+] MiCode stock + clang: remove -fuse-ld=lld from KBUILD_CFLAGS (makes every cc-option -Werror probe fail with 'argument unused during compilation' -> breaks stackprotector + feature detection). Link still uses LD=ld.lld from the make cmd."
+          sed -i '/KBUILD_CFLAGS[[:space:]]*+=[[:space:]]*-fuse-ld=lld/d' Makefile || true
+          echo "[+] also disable stackprotector (belt-and-suspenders for prepare-compiler-check)"
+          sed -i '/^CONFIG_CC_STACKPROTECTOR_STRONG=y/d; /^CONFIG_CC_STACKPROTECTOR_REGULAR=y/d; /^CONFIG_CC_STACKPROTECTOR_AUTO=y/d' "$DC" || true
+          echo 'CONFIG_CC_STACKPROTECTOR_NONE=y' >> "$DC"
 
           echo "[+] keep SUS_MAP off (old show_smap(...,is_pid) signature on 4.14 MTK)"
           sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' "$DC" || true
