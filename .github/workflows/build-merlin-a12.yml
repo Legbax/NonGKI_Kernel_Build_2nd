@@ -100,6 +100,9 @@ jobs:
           cd $GITHUB_WORKSPACE/device_kernel
           DC=arch/arm64/configs/merlin_defconfig
 
+          echo "[+] MiCode stock: drop -Werror from the Makefile prepare-compiler-check stackprotector probe (clang emits a benign warning that -Werror turns fatal -> 'not supported')"
+          sed -i 's/-Werror -fstack-protector/-fstack-protector/g' Makefile || true
+
           echo "[+] keep SUS_MAP off (old show_smap(...,is_pid) signature on 4.14 MTK)"
           sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' "$DC" || true
           echo "# CONFIG_KSU_SUSFS_SUS_MAP is not set" >> "$DC"
