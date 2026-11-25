@@ -106,6 +106,9 @@ jobs:
           sed -i '/^CONFIG_CC_STACKPROTECTOR_STRONG=y/d; /^CONFIG_CC_STACKPROTECTOR_REGULAR=y/d; /^CONFIG_CC_STACKPROTECTOR_AUTO=y/d' "$DC" || true
           echo 'CONFIG_CC_STACKPROTECTOR_NONE=y' >> "$DC"
 
+          echo "[+] MiCode stock + clang: use the integrated assembler (remove 'CLANG_FLAGS += -no-integrated-as'; the external /usr/bin/as is host-x86 and rejects the ARM '-EL' flag)"
+          sed -i '/CLANG_FLAGS[[:space:]]*+=[[:space:]]*-no-integrated-as/d' Makefile || true
+
           echo "[+] keep SUS_MAP off (old show_smap(...,is_pid) signature on 4.14 MTK)"
           sed -i '/^CONFIG_KSU_SUSFS_SUS_MAP=y/d' "$DC" || true
           echo "# CONFIG_KSU_SUSFS_SUS_MAP is not set" >> "$DC"
